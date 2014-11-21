@@ -80,7 +80,7 @@ config CGROUP_BFQIO
 	---help---
 	  Enable hierarchical scheduling in BFQ, using the cgroups
 	  filesystem interface.  The name of the subsystem will be
-	  bfqio.z
+	  bfqio
 
 config IOSCHED_FIOPS
 	tristate "IOPS based I/O scheduler"
