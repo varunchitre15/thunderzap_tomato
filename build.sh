@@ -18,6 +18,7 @@ KERNEL_DIR=$PWD
 ZIMAGE=$KERNEL_DIR/arch/arm/boot/zImage
 MKBOOTIMG=$KERNEL_DIR/tools/mkbootimg
 MKBOOTFS=$KERNEL_DIR/tools/mkbootfs
+DTBTOOL=$KERNEL_DIR/tools/dtbToolCM
 ROOTFS=$KERNEL_DIR/root.fs
 BOOTIMG=$KERNEL_DIR/boot.img
 BUILD_START=$(date +"%s")
@@ -55,6 +56,7 @@ echo "             Creating boot image for $2"
 echo -e "*************************************************$nocol"
 $MKBOOTFS $1/ > $KERNEL_DIR/ramdisk.cpio
 cat $KERNEL_DIR/ramdisk.cpio | gzip > $KERNEL_DIR/root.fs
+$DTBTOOL -2 -o $KERNEL_DIR/arch/arm/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm/boot/dts/
 $MKBOOTIMG --kernel $ZIMAGE --ramdisk $KERNEL_DIR/root.fs --cmdline "console=ttyHSL0,115200,n8 boot_cpus=0,4,5,6,7 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci sched_enable_hmp=1"  --base 0x80000000 --pagesize 2048 --ramdisk_offset 0x01000000 --kernel_offset 0x00008000 --tags_offset 0x00000100 second_offset 0x00f00000 --dt arch/arm/boot/dt.img -o $KERNEL_DIR/boot.img
 if ! [ -a $ROOTFS ];
 then
