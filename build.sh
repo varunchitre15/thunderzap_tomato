@@ -40,6 +40,7 @@ echo "          Compiling ThunderZap kernel          "
 echo -e "***********************************************$nocol"
 make cyanogenmod_tomato_defconfig
 make zImage -j32
+make dtbs
 if ! [ -a $ZIMAGE ];
 then
 echo -e "$red Kernel Compilation failed! Fix the errors! $nocol"
