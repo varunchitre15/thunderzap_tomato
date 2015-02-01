@@ -1287,7 +1287,7 @@ static struct regulator_ops krait_adj_ops = {
 	.is_enabled		= krait_adj_is_enabled,
 };
 
-#define DEFAULT_REDUCTION_PERCENTAGE	75
+#define DEFAULT_REDUCTION_PERCENTAGE	65
 static int krait_adj_init(struct krait_power_vreg *kvreg,
 						struct platform_device *pdev,
 						struct device_node *adj_node)
