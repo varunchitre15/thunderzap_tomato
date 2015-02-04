@@ -191,7 +191,7 @@ enum support_gesture_e {
                                 TW_SUPPORT_M_SLIDE_WAKEUP | TW_SUPPORT_DOUBLE_CLICK_WAKEUP)
 };
 
-u32 support_gesture = TW_SUPPORT_NONE_SLIDE_WAKEUP;
+u32 support_gesture = TW_SUPPORT_DOUBLE_CLICK_WAKEUP;
 char wakeup_slide[32];
 
 #endif
@@ -2066,6 +2066,11 @@ int goodix_get_wakeup_gesture(char*  gesture)
         return sprintf(gesture, "%s", (char *)wakeup_slide);
 }
 
+int goodix_get_gesture_ctrl(char *gesture_ctrl)
+{
+    return sprintf(gesture_ctrl, "0x%08x", support_gesture);
+}
+
 int goodix_gesture_ctrl(const char*  gesture_buf)
 {
     char *gesture;
@@ -2273,6 +2278,7 @@ touchscreen_ops_tpye goodix_ops=
     .get_vendor             = goodix_vendor,
 #if GTP_SLIDE_WAKEUP
     .get_wakeup_gesture         = goodix_get_wakeup_gesture,
+    .get_gesture_ctrl           = goodix_get_gesture_ctrl,
     .gesture_ctrl               =goodix_gesture_ctrl,
 #endif
 };
