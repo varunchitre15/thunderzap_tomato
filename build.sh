@@ -57,7 +57,7 @@ echo -e "*************************************************$nocol"
 $MKBOOTFS $1/ > $KERNEL_DIR/ramdisk.cpio
 cat $KERNEL_DIR/ramdisk.cpio | gzip > $KERNEL_DIR/root.fs
 $DTBTOOL -2 -o $KERNEL_DIR/arch/arm/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm/boot/dts/
-$MKBOOTIMG --kernel $ZIMAGE --ramdisk $KERNEL_DIR/root.fs --cmdline "console=ttyHSL0,115200,n8 boot_cpus=0,4,5,6,7 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci sched_enable_hmp=1"  --base 0x80000000 --pagesize 2048 --ramdisk_offset 0x01000000 --kernel_offset 0x00008000 --tags_offset 0x00000100 second_offset 0x00f00000 --dt arch/arm/boot/dt.img -o $KERNEL_DIR/boot.img
+$MKBOOTIMG --kernel $ZIMAGE --ramdisk $KERNEL_DIR/root.fs --cmdline "console=ttyHSL0,115200,n8 boot_cpus=0,4,5,6,7 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci sched_enable_hmp=1"  --base 0x80000000 --pagesize 2048 --ramdisk_offset 0x01000000 --kernel_offset 0x00008000 --tags_offset 0x00000100 --second_offset 0x00f00000 --dt arch/arm/boot/dt.img -o $KERNEL_DIR/boot.img
 if ! [ -a $ROOTFS ];
 then
 echo -e "$red Ramdisk creation failed $nocol"
