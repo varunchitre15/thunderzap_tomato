@@ -55,8 +55,8 @@ compile_bootimg ()
 echo -e "$yellow*************************************************"
 echo "             Creating boot image for $2"
 echo -e "*************************************************$nocol"
-$MKBOOTFS $1/ > $KERNEL_DIR/ramdisk.cpio
-cat $KERNEL_DIR/ramdisk.cpio | $MINIGZIP > $KERNEL_DIR/root.fs
+# $MKBOOTFS $1/ > $KERNEL_DIR/ramdisk.cpio
+# cat $KERNEL_DIR/ramdisk.cpio | $MINIGZIP > $KERNEL_DIR/root.fs
 $DTBTOOL -2 -o $KERNEL_DIR/arch/arm/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm/boot/dts/
 $MKBOOTIMG --kernel $ZIMAGE --ramdisk $KERNEL_DIR/root.fs --cmdline "console=ttyHSL0,115200,n8 boot_cpus=0,4,5,6,7 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci sched_enable_hmp=1"  --base 0x80000000 --pagesize 2048 --dt arch/arm/boot/dt.img -o $KERNEL_DIR/boot.img
 if ! [ -a $ROOTFS ];
@@ -82,23 +82,15 @@ cm11)
 compile_kernel
 compile_bootimg ramdisk-cm11 CM11
 ;;
-stock)
-compile_kernel
-compile_bootimg ramdisk Stock
-;;
-cm12)
-compile_kernel
-compile_bootimg ramdisk-cm12 CM12
-;;
 image-only-cm11)
 compile_bootimg ramdisk Stock
 ;;
 clean)
 make ARCH=arm -j8 clean mrproper
-rm -rf $KERNEL_DIR/ramdisk.cpio $KERNEL_DIR/root.fs $KERNEL_DIR/boot.img
+rm -rf $KERNEL_DIR/ramdisk.cpio $KERNEL_DIR/boot.img $KERNEL_DIR/arch/arm/boot/dt.img
 ;;
 *)
-echo -e "Add valid option\nValid options are:\n./build.sh (stock|cm11|cm12|clean)"
+echo -e "Add valid option\nValid options are:\n./build.sh (cm11|clean)"
 exit 1
 ;;
 esac
