@@ -1426,7 +1426,7 @@ static int bq24157_parse_dt(struct bq24157_chip *chip)
 		dev_err(chip->dev,"chip->irq_gpio = %dis invalid! \n", chip->irq_gpio);
 		return -EINVAL;
 	}
-	
+
 	rc = of_property_read_u32(node, "yl,max-vbus-current-mA", &chip->vbus_curr_max);
 	if (rc < 0)
 		return -EINVAL;
@@ -1439,9 +1439,13 @@ static int bq24157_parse_dt(struct bq24157_chip *chip)
 	if (rc < 0)
 		return -EINVAL;
 
+#ifdef CONFIG_THUNDERCHARGE_CONTROL
+	chip->chg_curr_max = custom_current;
+#else
 	rc = of_property_read_u32(node, "yl,max-charge-current-mA", &chip->chg_curr_max);
 	if (rc < 0)
 		return -EINVAL;
+#endif
 	chip->chg_curr_now = chip->chg_curr_max;
 	
 	rc = of_property_read_u32(node, "yl,term-current-mA", &chip->iterm_ma);
