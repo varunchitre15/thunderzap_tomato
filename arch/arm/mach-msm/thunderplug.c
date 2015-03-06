@@ -20,12 +20,64 @@
 #include <linux/powersuspend.h>
 #include <linux/cpufreq.h>
 
-static int suspend_cpu_num = 2;
+static int suspend_cpu_num = 2, resume_cpu_num = 7;
+static int endurance_level = 0;
+static int device_cpus = 8;
 
 #define THUNDERPLUG "thunderplug"
 
 #define DRIVER_VERSION  1
-#define DRIVER_SUBVER 1
+#define DRIVER_SUBVER 5
+
+static inline void offline_cpus(void)
+{
+	unsigned int cpu;
+	switch(endurance_level) {
+		case 1:
+			if(suspend_cpu_num > 4)
+				suspend_cpu_num = 4;
+		break;
+		case 2:
+			if(suspend_cpu_num > 2)
+				suspend_cpu_num = 2;
+		break;
+		default:
+		break;
+	}
+	for(cpu = 7; cpu > (suspend_cpu_num - 1); cpu--) {
+		if (cpu_online(cpu))
+			cpu_down(cpu);
+	}
+	pr_info("%s: %d cpus were offlined\n", THUNDERPLUG, (device_cpus - suspend_cpu_num));
+}
+
+static inline void cpus_online_all(void)
+{
+	unsigned int cpu;
+	switch(endurance_level) {
+	case 1:
+		if(resume_cpu_num > 3 || resume_cpu_num == 1)
+			resume_cpu_num = 3;
+	break;
+	case 2:
+		if(resume_cpu_num > 1)
+			resume_cpu_num = 1;
+	break;
+	case 0:
+		if(resume_cpu_num < 7)
+			resume_cpu_num = 7;
+	break;
+	default:
+	break;
+	}
+
+	for (cpu = 1; cpu <= resume_cpu_num; cpu++) {
+		if (cpu_is_offline(cpu))
+			cpu_up(cpu);
+	}
+
+	pr_info("%s: all cpus were onlined\n", THUNDERPLUG);
+}
 
 static ssize_t thunderplug_suspend_cpus_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -36,7 +88,7 @@ static ssize_t thunderplug_suspend_cpus_store(struct kobject *kobj, struct kobj_
 {
 	int val;
 	sscanf(buf, "%d", &val);
-	if(val < 1 || val > 7)
+	if(val < 1 || val > 8)
 		pr_info("%s: suspend cpus off-limits\n", THUNDERPLUG);
 	else
 		suspend_cpu_num = val;
@@ -44,26 +96,31 @@ static ssize_t thunderplug_suspend_cpus_store(struct kobject *kobj, struct kobj_
 	return count;
 }
 
-static inline void offline_cpus()
+static ssize_t thunderplug_endurance_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	unsigned int cpu;
-	for(cpu = 7; cpu > (suspend_cpu_num - 1); cpu--) {
-		if (cpu_online(cpu))
-			cpu_down(cpu);
-	}
-	pr_info("%s: %d cpus were offlined\n", THUNDERPLUG, suspend_cpu_num);
+    return sprintf(buf, "%d", endurance_level);
 }
 
-static inline void cpus_online_all(void)
+static ssize_t __ref thunderplug_endurance_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	unsigned int cpu;
-
-	for (cpu = 1; cpu < 8; cpu++) {
-		if (cpu_is_offline(cpu))
-			cpu_up(cpu);
+	int val;
+	sscanf(buf, "%d", &val);
+	switch(val) {
+	case 0:
+	case 1:
+	case 2:
+		if(endurance_level!=val) {
+		endurance_level = val;
+		offline_cpus();
+		cpus_online_all();
+	}
+	break;
+	default:
+		pr_info("%s: invalid endurance level\n", THUNDERPLUG);
+	break;
 	}
 
-	pr_info("%s: all cpus were onlined\n", THUNDERPLUG);
+	return count;
 }
 
 static void thunderplug_suspend(struct power_suspend *h)
@@ -95,10 +152,16 @@ static struct kobj_attribute thunderplug_suspend_cpus_attribute =
                0666,
                thunderplug_suspend_cpus_show, thunderplug_suspend_cpus_store);
 
+static struct kobj_attribute thunderplug_endurance_attribute =
+       __ATTR(endurance_level,
+               0666,
+               thunderplug_endurance_show, thunderplug_endurance_store);
+
 static struct attribute *thunderplug_attrs[] =
     {
         &thunderplug_ver_attribute.attr,
         &thunderplug_suspend_cpus_attribute.attr,
+        &thunderplug_endurance_attribute.attr,
         NULL,
     };
 
@@ -143,14 +206,7 @@ static int __init thunderplug_init(void)
         return ret;
 }
 
-static void __exit thunderplug_exit(void)
-{
-        unregister_power_suspend(&thunderplug_power_suspend_handler);
-}
-
-
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Varun Chitre <varun.chitre15@gmail.com>");
 MODULE_DESCRIPTION("Hotplug driver for OctaCore CPU");
 late_initcall(thunderplug_init);
-module_exit(thunderplug_exit);
