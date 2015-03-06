@@ -29,7 +29,7 @@ yellow='\033[0;33m'
 red='\033[0;31m'
 nocol='\033[0m'
 # Modify the following variable if you want to build
-export CROSS_COMPILE="/root/linaro/4.7.3-2013.04.20130415/bin/arm-linux-gnueabihf-"
+export CROSS_COMPILE="/root/linaro/4.8.3-2013.11.20131205/bin/arm-linux-gnueabihf-"
 export ARCH=arm
 export SUBARCH=arm
 export KBUILD_BUILD_USER="varun.chitre15"
