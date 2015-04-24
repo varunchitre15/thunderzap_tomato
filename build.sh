@@ -29,6 +29,8 @@ export ARCH=arm64
 export SUBARCH=arm64
 export KBUILD_BUILD_USER="varun.chitre15"
 export KBUILD_BUILD_HOST="Monster-Machine"
+STRIP="/root/cm12.1/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-strip"
+MODULES_DIR=$KERNEL_DIR/../modulesTomato
 
 compile_kernel ()
 {
@@ -38,12 +40,26 @@ echo -e "***********************************************$nocol"
 make cyanogenmod_tomato-64_defconfig
 make Image -j12
 make dtbs -j12
+make modules -j12
 $DTBTOOL -2 -o $KERNEL_DIR/arch/arm64/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm64/boot/dts/
 if ! [ -a $KERN_IMG ];
 then
 echo -e "$red Kernel Compilation failed! Fix the errors! $nocol"
 exit 1
 fi
+strip_modules
+}
+
+strip_modules ()
+{
+echo "Copying modules"
+rm $MODULES_DIR/*
+find . -name '*.ko' -exec cp {} $MODULES_DIR/ \;
+cd $MODULES_DIR
+echo "Stripping modules for size"
+$STRIP --strip-unneeded *.ko
+zip -9 modules *
+cd $KERNEL_DIR
 }
 
 case $1 in
