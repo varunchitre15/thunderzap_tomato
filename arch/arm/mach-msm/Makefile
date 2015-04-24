@@ -1,5 +1,4 @@
 obj-y += io.o dma.o memory.o
-obj-$(CONFIG_THUNDERPLUG_CONTROL) += thunderplug.o
 ifndef CONFIG_ARM_ARCH_TIMER
 obj-y += timer.o
 endif
