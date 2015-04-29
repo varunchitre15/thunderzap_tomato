@@ -26,8 +26,33 @@ static int device_cpus = 8;
 
 #define THUNDERPLUG "thunderplug"
 
-#define DRIVER_VERSION  1
-#define DRIVER_SUBVER 5
+#define DRIVER_VERSION  2
+#define DRIVER_SUBVER 0
+
+#define CPU_UP_THRESHOLD        (65)
+#define CPU_DOWN_DIFFERENTIAL   (10)
+#define CPU_UP_AVG_TIMES        (10)
+#define CPU_DOWN_AVG_TIMES      (50)
+
+#define DEF_SAMPLING_MS			(500)
+
+static int sampling_time = DEF_SAMPLING_MS;
+
+static struct workqueue_struct *tplug_wq;
+static struct delayed_work tplug_work;
+static unsigned int last_load[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+struct cpu_load_data {
+	u64 prev_cpu_idle;
+	u64 prev_cpu_wall;
+	unsigned int avg_load_maxfreq;
+	unsigned int cur_load_maxfreq;
+	unsigned int samples;
+	unsigned int window_size;
+	cpumask_var_t related_cpus;
+};
+
+static DEFINE_PER_CPU(struct cpu_load_data, cpuload);
 
 static inline void offline_cpus(void)
 {
@@ -123,6 +148,70 @@ static ssize_t __ref thunderplug_endurance_store(struct kobject *kobj, struct ko
 	return count;
 }
 
+static unsigned int get_curr_load(unsigned int cpu)
+{
+	int ret;
+	unsigned int idle_time, wall_time;
+	unsigned int cur_load, load_max_freq;
+	u64 cur_wall_time, cur_idle_time;
+	struct cpu_load_data *pcpu = &per_cpu(cpuload, cpu);
+	struct cpufreq_policy policy;
+
+	ret = cpufreq_get_policy(&policy, cpu);
+	if (ret)
+		return -EINVAL;
+
+	cur_idle_time = get_cpu_idle_time(cpu, &cur_wall_time, 0);
+
+	wall_time = (unsigned int) (cur_wall_time - pcpu->prev_cpu_wall);
+	pcpu->prev_cpu_wall = cur_wall_time;
+
+	idle_time = (unsigned int) (cur_idle_time - pcpu->prev_cpu_idle);
+	pcpu->prev_cpu_idle = cur_idle_time;
+
+	if (unlikely(!wall_time || wall_time < idle_time))
+		return 0;
+
+	cur_load = 100 * (wall_time - idle_time) / wall_time;
+	return cur_load;
+}
+
+static void __cpuinit tplug_work_fn(struct work_struct *work)
+{
+	int i;
+	unsigned int load[8], avg_load[8];
+	for(i = 0 ; i < 8; i++)
+	{
+		if(cpu_online(i))
+			load[i] = get_curr_load(i);
+		else
+			load[i] = 0;
+
+		avg_load[i] = ((int) load[i] + (int) last_load[i]) / 2;
+		last_load[i] = load[i];
+	}
+
+	for(i = 0 ; i < 8; i++)
+	{
+	if(cpu_online(i) && avg_load[i] > 55 && cpu_is_offline(i+1))
+	{
+		pr_info("thunderplug : bringing back cpu%d\n",i);
+		if(!((i+1) > 7))
+			cpu_up(i+1);
+	}
+	else if(cpu_online(i) && avg_load[i] < 55 && cpu_online(i+1))
+	{
+		pr_info("thunderplug : offlining cpu%d\n",i);
+		if(!(i+1)==0)
+			cpu_down(i+1);
+	}
+	}
+
+	queue_delayed_work_on(0, tplug_wq, &tplug_work,
+		msecs_to_jiffies(sampling_time));
+
+}
+
 static void thunderplug_suspend(struct power_suspend *h)
 {
 	offline_cpus();
@@ -200,6 +289,12 @@ static int __init thunderplug_init(void)
         }
 
         register_power_suspend(&thunderplug_power_suspend_handler);
+		tplug_wq = alloc_workqueue("tplug",
+				WQ_HIGHPRI | WQ_UNBOUND, 1);
+
+		INIT_DELAYED_WORK(&tplug_work, tplug_work_fn);
+		queue_delayed_work_on(0, tplug_wq, &tplug_work,
+		                      msecs_to_jiffies(10));
 
         pr_info("%s: init\n", THUNDERPLUG);
 
