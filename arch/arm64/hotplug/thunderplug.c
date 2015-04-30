@@ -39,6 +39,8 @@ static int core_limit = 8;
 static int sampling_time = DEF_SAMPLING_MS;
 static int load_threshold = CPU_LOAD_THRESHOLD;
 
+static int tplug_hp_enabled = 1;
+
 static struct workqueue_struct *tplug_wq;
 static struct delayed_work tplug_work;
 static unsigned int last_load[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -164,6 +166,32 @@ static ssize_t __ref thunderplug_sampling_store(struct kobject *kobj, struct kob
 	return count;
 }
 
+static ssize_t thunderplug_hp_enabled_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d", tplug_hp_enabled);
+}
+
+static ssize_t __ref thunderplug_hp_enabled_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d", &val);
+	int last_val = tplug_hp_enabled;
+	switch(val)
+	{
+		case 0:
+		case 1:
+			tplug_hp_enabled = val;
+		default:
+			pr_info("thunderplug : invalid choice\n");
+	}
+
+	if(tplug_hp_enabled == 1 && tplug_hp_enabled != last_val)
+		queue_delayed_work_on(0, tplug_wq, &tplug_work,
+							msecs_to_jiffies(sampling_time));
+
+	return count;
+}
+
 static ssize_t thunderplug_load_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     return sprintf(buf, "%d", load_threshold);
@@ -253,8 +281,11 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 	}
 	}
 
-	queue_delayed_work_on(0, tplug_wq, &tplug_work,
-		msecs_to_jiffies(sampling_time));
+	if(tplug_hp_enabled != 0)
+		queue_delayed_work_on(0, tplug_wq, &tplug_work,
+			msecs_to_jiffies(sampling_time));
+	else
+		cpus_online_all();
 
 }
 
@@ -302,6 +333,11 @@ static struct kobj_attribute thunderplug_load_attribute =
                0666,
                thunderplug_load_show, thunderplug_load_store);
 
+static struct kobj_attribute thunderplug_hp_enabled_attribute =
+       __ATTR(hotplug_enabled,
+               0666,
+               thunderplug_hp_enabled_show, thunderplug_hp_enabled_store);
+
 static struct attribute *thunderplug_attrs[] =
     {
         &thunderplug_ver_attribute.attr,
@@ -309,6 +345,7 @@ static struct attribute *thunderplug_attrs[] =
         &thunderplug_endurance_attribute.attr,
         &thunderplug_sampling_attribute.attr,
         &thunderplug_load_attribute.attr,
+        &thunderplug_hp_enabled_attribute.attr,
         NULL,
     };
 
