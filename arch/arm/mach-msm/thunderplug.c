@@ -182,7 +182,7 @@ static ssize_t __ref thunderplug_hp_enabled_store(struct kobject *kobj, struct k
 		case 1:
 			tplug_hp_enabled = val;
 		default:
-			pr_info("thunderplug : invalid choice\n");
+			pr_info("%s : invalid choice\n", THUNDERPLUG);
 	}
 
 	if(tplug_hp_enabled == 1 && tplug_hp_enabled != last_val)
@@ -211,7 +211,7 @@ static unsigned int get_curr_load(unsigned int cpu)
 {
 	int ret;
 	unsigned int idle_time, wall_time;
-	unsigned int cur_load, load_max_freq;
+	unsigned int cur_load;
 	u64 cur_wall_time, cur_idle_time;
 	struct cpu_load_data *pcpu = &per_cpu(cpuload, cpu);
 	struct cpufreq_policy policy;
@@ -268,14 +268,14 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 	if(cpu_online(i) && avg_load[i] > load_threshold && cpu_is_offline(i+1))
 	{
 	if(DEBUG)
-		pr_info("thunderplug : bringing back cpu%d\n",i);
+		pr_info("%s : bringing back cpu%d\n",i, THUNDERPLUG);
 		if(!((i+1) > 7))
 			cpu_up(i+1);
 	}
 	else if(cpu_online(i) && avg_load[i] < load_threshold && cpu_online(i+1))
 	{
 	if(DEBUG)
-		pr_info("thunderplug : offlining cpu%d\n",i);
+		pr_info("%s : offlining cpu%d\n",i, THUNDERPLUG);
 		if(!(i+1)==0)
 			cpu_down(i+1);
 	}
