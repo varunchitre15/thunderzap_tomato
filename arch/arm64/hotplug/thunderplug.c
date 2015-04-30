@@ -23,6 +23,7 @@
 static int suspend_cpu_num = 2, resume_cpu_num = 7;
 static int endurance_level = 0;
 static int device_cpus = 8;
+static int core_limit = 8;
 
 #define DEBUG 0
 
@@ -194,7 +195,20 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 {
 	int i;
 	unsigned int load[8], avg_load[8];
-	for(i = 0 ; i < 8; i++)
+
+	switch(endurance_level)
+	{
+	case 0:
+		core_limit = 8;
+	case 1:
+		core_limit = 4;
+	case 2:
+		core_limit = 2;
+	default:
+		core_limit = 8;
+	}
+
+	for(i = 0 ; i < core_limit; i++)
 	{
 		if(cpu_online(i))
 			load[i] = get_curr_load(i);
@@ -205,7 +219,7 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 		last_load[i] = load[i];
 	}
 
-	for(i = 0 ; i < 8; i++)
+	for(i = 0 ; i < core_limit; i++)
 	{
 	if(cpu_online(i) && avg_load[i] > CPU_LOAD_THRESHOLD && cpu_is_offline(i+1))
 	{
