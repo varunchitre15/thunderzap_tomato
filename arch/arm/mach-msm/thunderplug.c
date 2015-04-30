@@ -37,6 +37,7 @@ static int core_limit = 8;
 #define DEF_SAMPLING_MS			(500)
 
 static int sampling_time = DEF_SAMPLING_MS;
+static int load_threshold = CPU_LOAD_THRESHOLD;
 
 static struct workqueue_struct *tplug_wq;
 static struct delayed_work tplug_work;
@@ -163,6 +164,21 @@ static ssize_t __ref thunderplug_sampling_store(struct kobject *kobj, struct kob
 	return count;
 }
 
+static ssize_t thunderplug_load_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d", load_threshold);
+}
+
+static ssize_t __ref thunderplug_load_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d", &val);
+	if(val > 10)
+		load_threshold = val;
+
+	return count;
+}
+
 static unsigned int get_curr_load(unsigned int cpu)
 {
 	int ret;
@@ -221,14 +237,14 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 
 	for(i = 0 ; i < core_limit; i++)
 	{
-	if(cpu_online(i) && avg_load[i] > CPU_LOAD_THRESHOLD && cpu_is_offline(i+1))
+	if(cpu_online(i) && avg_load[i] > load_threshold && cpu_is_offline(i+1))
 	{
 	if(DEBUG)
 		pr_info("thunderplug : bringing back cpu%d\n",i);
 		if(!((i+1) > 7))
 			cpu_up(i+1);
 	}
-	else if(cpu_online(i) && avg_load[i] < CPU_LOAD_THRESHOLD && cpu_online(i+1))
+	else if(cpu_online(i) && avg_load[i] < load_threshold && cpu_online(i+1))
 	{
 	if(DEBUG)
 		pr_info("thunderplug : offlining cpu%d\n",i);
@@ -281,12 +297,18 @@ static struct kobj_attribute thunderplug_sampling_attribute =
                0666,
                thunderplug_sampling_show, thunderplug_sampling_store);
 
+static struct kobj_attribute thunderplug_load_attribute =
+       __ATTR(load_threshold,
+               0666,
+               thunderplug_load_show, thunderplug_load_store);
+
 static struct attribute *thunderplug_attrs[] =
     {
         &thunderplug_ver_attribute.attr,
         &thunderplug_suspend_cpus_attribute.attr,
         &thunderplug_endurance_attribute.attr,
         &thunderplug_sampling_attribute.attr,
+        &thunderplug_load_attribute.attr,
         NULL,
     };
 
