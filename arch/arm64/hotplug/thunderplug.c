@@ -24,15 +24,14 @@ static int suspend_cpu_num = 2, resume_cpu_num = 7;
 static int endurance_level = 0;
 static int device_cpus = 8;
 
+#define DEBUG 0
+
 #define THUNDERPLUG "thunderplug"
 
 #define DRIVER_VERSION  2
 #define DRIVER_SUBVER 0
 
-#define CPU_UP_THRESHOLD        (65)
-#define CPU_DOWN_DIFFERENTIAL   (10)
-#define CPU_UP_AVG_TIMES        (10)
-#define CPU_DOWN_AVG_TIMES      (50)
+#define CPU_LOAD_THRESHOLD        (65)
 
 #define DEF_SAMPLING_MS			(500)
 
@@ -148,6 +147,21 @@ static ssize_t __ref thunderplug_endurance_store(struct kobject *kobj, struct ko
 	return count;
 }
 
+static ssize_t thunderplug_sampling_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d", sampling_time);
+}
+
+static ssize_t __ref thunderplug_sampling_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d", &val);
+	if(val > 50)
+		sampling_time = val;
+
+	return count;
+}
+
 static unsigned int get_curr_load(unsigned int cpu)
 {
 	int ret;
@@ -193,14 +207,16 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 
 	for(i = 0 ; i < 8; i++)
 	{
-	if(cpu_online(i) && avg_load[i] > 55 && cpu_is_offline(i+1))
+	if(cpu_online(i) && avg_load[i] > CPU_LOAD_THRESHOLD && cpu_is_offline(i+1))
 	{
+	if(DEBUG)
 		pr_info("thunderplug : bringing back cpu%d\n",i);
 		if(!((i+1) > 7))
 			cpu_up(i+1);
 	}
-	else if(cpu_online(i) && avg_load[i] < 55 && cpu_online(i+1))
+	else if(cpu_online(i) && avg_load[i] < CPU_LOAD_THRESHOLD && cpu_online(i+1))
 	{
+	if(DEBUG)
 		pr_info("thunderplug : offlining cpu%d\n",i);
 		if(!(i+1)==0)
 			cpu_down(i+1);
@@ -246,11 +262,17 @@ static struct kobj_attribute thunderplug_endurance_attribute =
                0666,
                thunderplug_endurance_show, thunderplug_endurance_store);
 
+static struct kobj_attribute thunderplug_sampling_attribute =
+       __ATTR(sampling_rate,
+               0666,
+               thunderplug_sampling_show, thunderplug_sampling_store);
+
 static struct attribute *thunderplug_attrs[] =
     {
         &thunderplug_ver_attribute.attr,
         &thunderplug_suspend_cpus_attribute.attr,
         &thunderplug_endurance_attribute.attr,
+        &thunderplug_sampling_attribute.attr,
         NULL,
     };
 
