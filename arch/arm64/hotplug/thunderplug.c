@@ -16,6 +16,8 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/device.h>
+#include <linux/input.h>
+#include <linux/slab.h>
 #include <linux/cpu.h>
 #include <linux/lcd_notify.h>
 #include <linux/cpufreq.h>
@@ -45,8 +47,13 @@ static int load_threshold = CPU_LOAD_THRESHOLD;
 
 static int tplug_hp_enabled = 1;
 
+static int touch_boost_enabled = 0;
+
 static struct workqueue_struct *tplug_wq;
 static struct delayed_work tplug_work;
+
+static struct workqueue_struct *tplug_boost_wq;
+static struct delayed_work tplug_boost;
 
 static struct workqueue_struct *tplug_resume_wq;
 static struct delayed_work tplug_resume_work;
@@ -114,6 +121,78 @@ static inline void cpus_online_all(void)
 
 	pr_info("%s: all cpus were onlined\n", THUNDERPLUG);
 }
+
+static void __ref tplug_boost_work_fn(struct work_struct *work)
+{
+	int cpu;
+	for(cpu = 1; cpu < 4; cpu++) {
+		if(cpu_is_offline(cpu))
+			cpu_up(cpu);
+	}
+}
+
+static void tplug_input_event(struct input_handle *handle, unsigned int type,
+		unsigned int code, int value)
+{
+
+	if ((type == EV_KEY) && (code == BTN_TOUCH) && (value == 1) && touch_boost_enabled == 1)
+	{
+		if(DEBUG)
+			pr_info("%s : touch boost\n", THUNDERPLUG);
+		queue_delayed_work_on(0, tplug_boost_wq, &tplug_boost,
+			msecs_to_jiffies(0));
+	}
+}
+
+static int tplug_input_connect(struct input_handler *handler,
+		struct input_dev *dev, const struct input_device_id *id)
+{
+	struct input_handle *handle;
+	int error;
+
+	handle = kzalloc(sizeof(struct input_handle), GFP_KERNEL);
+	if (!handle)
+		return -ENOMEM;
+
+	handle->dev = dev;
+	handle->handler = handler;
+	handle->name = "cpufreq";
+
+	error = input_register_handle(handle);
+	if (error)
+		goto err2;
+
+	error = input_open_device(handle);
+	if (error)
+		goto err1;
+
+	return 0;
+err1:
+	input_unregister_handle(handle);
+err2:
+	kfree(handle);
+	return error;
+}
+
+static void tplug_input_disconnect(struct input_handle *handle)
+{
+	input_close_device(handle);
+	input_unregister_handle(handle);
+	kfree(handle);
+}
+
+static const struct input_device_id tplug_ids[] = {
+	{ .driver_info = 1 },
+	{ },
+};
+
+static struct input_handler tplug_input_handler = {
+	.event          = tplug_input_event,
+	.connect        = tplug_input_connect,
+	.disconnect     = tplug_input_disconnect,
+	.name           = "tplug_handler",
+	.id_table       = tplug_ids,
+};
 
 static ssize_t thunderplug_suspend_cpus_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -198,6 +277,29 @@ static ssize_t __ref thunderplug_hp_enabled_store(struct kobject *kobj, struct k
 	if(tplug_hp_enabled == 1 && tplug_hp_enabled != last_val)
 		queue_delayed_work_on(0, tplug_wq, &tplug_work,
 							msecs_to_jiffies(sampling_time));
+
+	return count;
+}
+
+static ssize_t thunderplug_tb_enabled_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d", touch_boost_enabled);
+}
+
+static ssize_t __ref thunderplug_tb_enabled_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	sscanf(buf, "%d", &val);
+	switch(val)
+	{
+		case 0:
+		case 1:
+			touch_boost_enabled = val;
+		break;
+		default:
+			pr_info("%s : invalid choice\n", THUNDERPLUG);
+		break;
+	}
 
 	return count;
 }
@@ -390,6 +492,11 @@ static struct kobj_attribute thunderplug_hp_enabled_attribute =
                0666,
                thunderplug_hp_enabled_show, thunderplug_hp_enabled_store);
 
+static struct kobj_attribute thunderplug_tb_enabled_attribute =
+       __ATTR(touch_boost,
+               0666,
+               thunderplug_tb_enabled_show, thunderplug_tb_enabled_store);
+
 static struct attribute *thunderplug_attrs[] =
     {
         &thunderplug_ver_attribute.attr,
@@ -398,6 +505,7 @@ static struct attribute *thunderplug_attrs[] =
         &thunderplug_sampling_attribute.attr,
         &thunderplug_load_attribute.attr,
         &thunderplug_hp_enabled_attribute.attr,
+        &thunderplug_tb_enabled_attribute.attr,
         NULL,
     };
 
@@ -433,14 +541,25 @@ static int __init thunderplug_init(void)
 
         lcd_register_client(&lcd_worker);
 
+		pr_info("%s : registering input boost", THUNDERPLUG);
+		ret = input_register_handler(&tplug_input_handler);
+		if (ret) {
+		pr_err("%s: Failed to register input handler: %d\n",
+		       THUNDERPLUG, ret);
+		}
+
 		tplug_wq = alloc_workqueue("tplug",
 				WQ_HIGHPRI | WQ_UNBOUND, 1);
 
 		tplug_resume_wq = alloc_workqueue("tplug_resume",
 				WQ_HIGHPRI | WQ_UNBOUND, 1);
 
+		tplug_boost_wq = alloc_workqueue("tplug_boost",
+				WQ_HIGHPRI | WQ_UNBOUND, 1);
+
 		INIT_DELAYED_WORK(&tplug_work, tplug_work_fn);
 		INIT_DELAYED_WORK(&tplug_resume_work, tplug_resume_work_fn);
+		INIT_DELAYED_WORK(&tplug_boost, tplug_boost_work_fn);
 		queue_delayed_work_on(0, tplug_wq, &tplug_work,
 		                      msecs_to_jiffies(10));
 
