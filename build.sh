@@ -24,12 +24,12 @@ yellow='\033[0;33m'
 red='\033[0;31m'
 nocol='\033[0m'
 # Modify the following variable if you want to build
-export CROSS_COMPILE="/root/cm12.1/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-"
+export CROSS_COMPILE="/home/varunchitre15/cm12.1/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-"
 export ARCH=arm64
 export SUBARCH=arm64
 export KBUILD_BUILD_USER="varun.chitre15"
 export KBUILD_BUILD_HOST="Monster-Machine"
-STRIP="/root/cm12.1/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-strip"
+STRIP="/home/varunchitre15/cm12.1/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-strip"
 MODULES_DIR=$KERNEL_DIR/../modulesTomato
 
 compile_kernel ()
