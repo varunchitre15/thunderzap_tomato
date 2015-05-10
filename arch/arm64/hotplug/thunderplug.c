@@ -135,7 +135,8 @@ static void tplug_input_event(struct input_handle *handle, unsigned int type,
 		unsigned int code, int value)
 {
 
-	if ((type == EV_KEY) && (code == BTN_TOUCH) && (value == 1) && touch_boost_enabled == 1)
+	if ((type == EV_KEY) && (code == BTN_TOUCH) && (value == 1)
+		&& touch_boost_enabled == 1 && tplug_hp_enabled == 1)
 	{
 		if(DEBUG)
 			pr_info("%s : touch boost\n", THUNDERPLUG);
