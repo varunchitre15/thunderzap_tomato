@@ -9,7 +9,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * A simple hotplugging driver optimized for Octa Core CPUs
+ * A simple hotplugging driver.
+ * Compatible from dual core CPUs to Octa Core CPUs
  */
 
 #include <linux/module.h>
@@ -22,35 +23,38 @@
 #include <linux/lcd_notify.h>
 #include <linux/cpufreq.h>
 
-static int suspend_cpu_num = 2, resume_cpu_num = 7;
-static int endurance_level = 0;
-static int device_cpus = 8;
-static int core_limit = 8;
+#define DEBUG                        0
+
+#define THUNDERPLUG                  "thunderplug"
+
+#define DRIVER_VERSION                3
+#define DRIVER_SUBVER                 0
+
+#define DEFAULT_CPU_LOAD_THRESHOLD   (65)
+#define MIN_CPU_LOAD_THRESHOLD       (10)
+
+#define HOTPLUG_ENABLED              (0)
+
+#define DEF_SAMPLING_MS	             (500)
+#define MIN_SAMLING_MS               (50)
+#define MIN_CPU_UP_TIME              (750)
+#define TOUCH_BOOST_ENABLED          (0)
 
 static bool isSuspended = false;
 
 struct notifier_block lcd_worker;
 
-#define DEBUG 0
-
-#define THUNDERPLUG "thunderplug"
-
-#define DRIVER_VERSION  2
-#define DRIVER_SUBVER 5
-
-#define CPU_LOAD_THRESHOLD        (65)
-
-#define DEF_SAMPLING_MS			(500)
-#define MIN_CPU_UP_TIME			(750)
+static int suspend_cpu_num = 2, resume_cpu_num = (NR_CPUS -1);
+static int endurance_level = 0;
+static int core_limit = NR_CPUS;
 
 static int now[8], last_time[8];
 
 static int sampling_time = DEF_SAMPLING_MS;
-static int load_threshold = CPU_LOAD_THRESHOLD;
+static int load_threshold = DEFAULT_CPU_LOAD_THRESHOLD;
 
-static int tplug_hp_enabled = 1;
-
-static int touch_boost_enabled = 0;
+static int tplug_hp_enabled = HOTPLUG_ENABLED;
+static int touch_boost_enabled = TOUCH_BOOST_ENABLED;
 
 static struct workqueue_struct *tplug_wq;
 static struct delayed_work tplug_work;
@@ -61,7 +65,7 @@ static struct delayed_work tplug_boost;
 static struct workqueue_struct *tplug_resume_wq;
 static struct delayed_work tplug_resume_work;
 
-static unsigned int last_load[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static unsigned int last_load[8] = { 0 };
 
 struct cpu_load_data {
 	u64 prev_cpu_idle;
@@ -75,26 +79,31 @@ struct cpu_load_data {
 
 static DEFINE_PER_CPU(struct cpu_load_data, cpuload);
 
+
+/* Two Endurance Levels for Octa Cores,
+ * Two for Quad Cores and
+ * One for Dual
+ */
 static inline void offline_cpus(void)
 {
 	unsigned int cpu;
 	switch(endurance_level) {
 		case 1:
-			if(suspend_cpu_num > 4)
-				suspend_cpu_num = 4;
+			if(suspend_cpu_num > NR_CPUS / 2 )
+				suspend_cpu_num = NR_CPUS / 2;
 		break;
 		case 2:
-			if(suspend_cpu_num > 2)
-				suspend_cpu_num = 2;
+			if( NR_CPUS >=4 && suspend_cpu_num > NR_CPUS / 4)
+				suspend_cpu_num = NR_CPUS / 4;
 		break;
 		default:
 		break;
 	}
-	for(cpu = 7; cpu > (suspend_cpu_num - 1); cpu--) {
+	for(cpu = NR_CPUS - 1; cpu > (suspend_cpu_num - 1); cpu--) {
 		if (cpu_online(cpu))
 			cpu_down(cpu);
 	}
-	pr_info("%s: %d cpus were offlined\n", THUNDERPLUG, (device_cpus - suspend_cpu_num));
+	pr_info("%s: %d cpus were offlined\n", THUNDERPLUG, (NR_CPUS - suspend_cpu_num));
 }
 
 static inline void cpus_online_all(void)
@@ -102,20 +111,22 @@ static inline void cpus_online_all(void)
 	unsigned int cpu;
 	switch(endurance_level) {
 	case 1:
-		if(resume_cpu_num > 3 || resume_cpu_num == 1)
-			resume_cpu_num = 3;
+		if(resume_cpu_num > (NR_CPUS / 2) - 1 || resume_cpu_num == 1)
+			resume_cpu_num = ((NR_CPUS / 2) - 1);
 	break;
 	case 2:
-		if(resume_cpu_num > 1)
-			resume_cpu_num = 1;
+		if( NR_CPUS >= 4 && resume_cpu_num > ((NR_CPUS / 4) - 1))
+			resume_cpu_num = ((NR_CPUS / 4) - 1);
 	break;
 	case 0:
-		if(resume_cpu_num < 7)
-			resume_cpu_num = 7;
+			resume_cpu_num = (NR_CPUS - 1);
 	break;
 	default:
 	break;
 	}
+
+	if(DEBUG)
+		   pr_info("%s: resume_cpu_num = %d\n",THUNDERPLUG, resume_cpu_num);
 
 	for (cpu = 1; cpu <= resume_cpu_num; cpu++) {
 		if (cpu_is_offline(cpu))
@@ -128,7 +139,7 @@ static inline void cpus_online_all(void)
 static void __ref tplug_boost_work_fn(struct work_struct *work)
 {
 	int cpu;
-	for(cpu = 1; cpu < 4; cpu++) {
+	for(cpu = 1; cpu < NR_CPUS; cpu++) {
 		if(cpu_is_offline(cpu))
 			cpu_up(cpu);
 	}
@@ -206,7 +217,7 @@ static ssize_t thunderplug_suspend_cpus_store(struct kobject *kobj, struct kobj_
 {
 	int val;
 	sscanf(buf, "%d", &val);
-	if(val < 1 || val > 8)
+	if(val < 1 || val > NR_CPUS)
 		pr_info("%s: suspend cpus off-limits\n", THUNDERPLUG);
 	else
 		suspend_cpu_num = val;
@@ -227,7 +238,8 @@ static ssize_t __ref thunderplug_endurance_store(struct kobject *kobj, struct ko
 	case 0:
 	case 1:
 	case 2:
-		if(endurance_level!=val) {
+		if(endurance_level!=val &&
+		   !(endurance_level > 1 && NR_CPUS < 4)) {
 		endurance_level = val;
 		offline_cpus();
 		cpus_online_all();
@@ -250,7 +262,7 @@ static ssize_t __ref thunderplug_sampling_store(struct kobject *kobj, struct kob
 {
 	int val;
 	sscanf(buf, "%d", &val);
-	if(val > 50)
+	if(val > MIN_SAMLING_MS)
 		sampling_time = val;
 
 	return count;
@@ -377,16 +389,16 @@ static void __cpuinit tplug_work_fn(struct work_struct *work)
 	switch(endurance_level)
 	{
 	case 0:
-		core_limit = 8;
+		core_limit = NR_CPUS;
 	break;
 	case 1:
-		core_limit = 4;
+		core_limit = NR_CPUS / 2;
 	break;
 	case 2:
-		core_limit = 2;
+		core_limit = NR_CPUS / 4;
 	break;
 	default:
-		core_limit = 8;
+		core_limit = NR_CPUS;
 	break;
 	}
 
@@ -578,5 +590,5 @@ static int __init thunderplug_init(void)
 
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Varun Chitre <varun.chitre15@gmail.com>");
-MODULE_DESCRIPTION("Hotplug driver for OctaCore CPU");
+MODULE_DESCRIPTION("Hotplug driver for ARM SoCs");
 late_initcall(thunderplug_init);
