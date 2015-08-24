@@ -37,7 +37,7 @@ compile_kernel ()
 echo -e "$blue***********************************************"
 echo "          Compiling ThunderZap kernel          "
 echo -e "***********************************************$nocol"
-rm $KERN_IMG
+rm -f $KERN_IMG
 make cyanogenmod_tomato-64_defconfig
 make Image -j12
 make dtbs -j12
