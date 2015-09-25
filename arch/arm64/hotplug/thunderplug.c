@@ -247,7 +247,7 @@ static ssize_t __ref thunderplug_endurance_store(struct kobject *kobj, struct ko
 {
 	int val;
 	sscanf(buf, "%d", &val);
-	if(tp_hp_style == 1) {
+	if(tplug_hp_style == 1) {
 	switch(val) {
 	case 0:
 	case 1:
