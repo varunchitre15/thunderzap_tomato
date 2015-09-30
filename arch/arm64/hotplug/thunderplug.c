@@ -55,6 +55,9 @@ static int now[8], last_time[8];
 
 static int sampling_time = DEF_SAMPLING_MS;
 static int load_threshold = DEFAULT_CPU_LOAD_THRESHOLD;
+static int stop_boost = 0;
+
+struct cpufreq_policy old_policy[NR_CPUS];
 
 #ifdef CONFIG_SCHED_HMP
 static int tplug_hp_style = DEFAULT_HOTPLUG_STYLE;
@@ -146,22 +149,51 @@ static inline void cpus_online_all(void)
 
 static void __ref tplug_boost_work_fn(struct work_struct *work)
 {
-	int cpu;
+	struct cpufreq_policy policy;
+	int cpu, ret;
 	for(cpu = 1; cpu < NR_CPUS; cpu++) {
+#ifdef CONFIG_SCHED_HMP
+    if(tplug_hp_style == 1)
+#else
+	if(tplug_hp_enabled == 1)
+#endif
 		if(cpu_is_offline(cpu))
 			cpu_up(cpu);
+		ret = cpufreq_get_policy(&policy, cpu);
+		if (ret)
+			continue;
+		old_policy[cpu] = policy;
+		policy.min = policy.max;
+		cpufreq_update_policy(cpu);
 	}
+	if(stop_boost == 0)
+	queue_delayed_work_on(0, tplug_boost_wq, &tplug_boost,
+			msecs_to_jiffies(10));
 }
 
 static void tplug_input_event(struct input_handle *handle, unsigned int type,
 		unsigned int code, int value)
 {
+	if (type == EV_KEY && code == BTN_TOUCH) {
+		if(DEBUG)
+			pr_info("%s : type = %d, code = %d, value = %d\n", THUNDERPLUG, type, code, value);
+		if(value == 0) {
+			stop_boost = 1;
+			if(DEBUG)
+				pr_info("%s: stopping boost\n", THUNDERPLUG);
+		}
+		else {
+			stop_boost = 0;
+			if(DEBUG)
+				pr_info("%s: starting boost\n", THUNDERPLUG);
+		}
+	}
 #ifdef CONFIG_SCHED_HMP
     if ((type == EV_KEY) && (code == BTN_TOUCH) && (value == 1)
-		&& touch_boost_enabled == 1 && tplug_hp_style == 1)
+		&& touch_boost_enabled == 1)
 #else
 	if ((type == EV_KEY) && (code == BTN_TOUCH) && (value == 1)
-		&& touch_boost_enabled == 1 && tplug_hp_enabled == 1)
+		&& touch_boost_enabled == 1)
 #endif
 	{
 		if(DEBUG)
