@@ -38,7 +38,7 @@ echo -e "$blue***********************************************"
 echo "          Compiling ThunderZap kernel          "
 echo -e "***********************************************$nocol"
 rm -f $KERN_IMG
-make cyanogenmod_tomato-64_defconfig
+make cyanogenmod_tomato-64_defconfig -j12
 make Image -j12
 make dtbs -j12
 make modules -j12
@@ -67,6 +67,11 @@ case $1 in
 clean)
 make ARCH=arm64 -j8 clean mrproper
 rm -rf $KERNEL_DIR/arch/arm/boot/dt.img
+;;
+dt)
+make cyanogenmod_tomato-64_defconfig -j12
+make dtbs -j12
+$DTBTOOL -2 -o $KERNEL_DIR/arch/arm64/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm/boot/dts/
 ;;
 *)
 compile_kernel
