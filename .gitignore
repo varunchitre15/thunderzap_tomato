@@ -33,6 +33,7 @@ modules.builtin
 *.patch
 *.gcno
 *.img
+*.zip
 
 #
 # Top-level generic files
